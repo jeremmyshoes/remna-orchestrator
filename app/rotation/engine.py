@@ -29,6 +29,31 @@ from app.remnawave import RemnawaveClient
 
 log = logging.getLogger(__name__)
 
+# Hetzner datacenter location → ISO-3166 alpha-2 country code.
+# Used to populate Remnawave's `countryCode` field correctly.
+_HETZNER_LOCATION_TO_COUNTRY: dict[str, str] = {
+    "fsn1": "DE",  # Falkenstein
+    "nbg1": "DE",  # Nuremberg
+    "hel1": "FI",  # Helsinki
+    "ash": "US",   # Ashburn, VA
+    "hil": "US",   # Hillsboro, OR
+    "sin": "SG",   # Singapore
+}
+
+
+def _location_to_country(location: str) -> str:
+    """Map a cloud location to ISO-3166 alpha-2 country code."""
+    if not location:
+        return "DE"
+    # Hetzner-style exact match first
+    if location in _HETZNER_LOCATION_TO_COUNTRY:
+        return _HETZNER_LOCATION_TO_COUNTRY[location]
+    # If caller already passed a 2-letter code (e.g. "DE"), keep it
+    if len(location) == 2 and location.isalpha():
+        return location.upper()
+    # Last resort
+    return "DE"
+
 
 def _render_cloud_init(**kwargs: str) -> str:
     env = Environment(
@@ -119,7 +144,7 @@ class RotationEngine:
             name=label,
             address=instance.ipv4,
             port=port,
-            country_code=instance.location[:2].upper() or "DE",
+            country_code=_location_to_country(instance.location),
             config_profile_uuid=profile_uuid,
             active_inbounds=active_inbounds,
         )
@@ -160,7 +185,7 @@ class RotationEngine:
                     select(Node).where(
                         Node.status == NodeStatus.ACTIVE,
                         Node.remnawave_uuid.is_not(None),
-                    ).limit(1)
+                    ).order_by(Node.id.desc()).limit(1)
                 )
             ).scalars().all()
 

@@ -18,6 +18,7 @@ from app.api.deps import EngineDep
 from app.core.config import get_settings
 from app.models import Node, NodeStatus, RotationEvent, RotationReason
 from app.models.base import session_scope
+from app.notifications.base import NotificationEvent
 from app.rotation.engine import RotationEngine
 
 router = APIRouter()
@@ -162,9 +163,12 @@ async def ui_destroy(
             await s.execute(select(Node).where(Node.id == node_id))
         ).scalar_one_or_none()
     if node:
+        # Each external call gets its own suppress block so a failure in one
+        # step doesn't skip the rest (otherwise we leave orphaned resources).
         if node.remnawave_uuid:
             with contextlib.suppress(Exception):
                 await engine.rw.disable_node(node.remnawave_uuid)
+            with contextlib.suppress(Exception):
                 await engine.rw.delete_node(node.remnawave_uuid)
         if node.fqdn:
             short = node.fqdn.replace(f".{get_settings().cloudflare_root_domain}", "")
@@ -176,6 +180,18 @@ async def ui_destroy(
         async with session_scope() as s:
             row = (await s.execute(select(Node).where(Node.id == node_id))).scalar_one()
             row.status = NodeStatus.DESTROYED
+            s.add(RotationEvent(
+                reason=RotationReason.MANUAL, from_node=node.name, to_node=None,
+                success=True, details="ui destroy",
+            ))
+        with contextlib.suppress(Exception):
+            await engine.notifier.send(NotificationEvent(
+                kind="node_destroyed",
+                message=f"Destroyed node {node.name}",
+                reason=RotationReason.MANUAL.value,
+                from_node=node.name,
+                extra={"ip": node.ipv4, "region": node.location},
+            ))
     async with session_scope() as s:
         nodes = (
             await s.execute(
