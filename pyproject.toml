@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "remna-orchestrator"
+version = "0.1.0"
+description = "Auto-deploy and IP rotation orchestrator for Remnawave VPN panel"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "httpx>=0.27",
+    "apscheduler>=3.10",
+    "hcloud>=2.0",
+    "cloudflare>=3.0",
+    "jinja2>=3.1",
+    "typer>=0.12",
+    "rich>=13.9",
+    "python-dotenv>=1.0",
+    "paramiko>=3.5",
+    "tenacity>=9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-mock>=3.14",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+remna-ctl = "app.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

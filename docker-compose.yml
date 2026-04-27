@@ -1,0 +1,15 @@
+services:
+  orchestrator:
+    build: .
+    image: remna-orchestrator:0.1.0
+    container_name: remna-orchestrator
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "sqlite+aiosqlite:////app/data/remna-orchestrator.db"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./templates:/app/templates:ro

@@ -1,0 +1,82 @@
+#cloud-config
+# Bootstrap a fresh Ubuntu 24.04 VPS into a Remnawave Node.
+# Jinja2 vars (rendered before Hetzner user-data is sent):
+#   {{ remnawave_panel_ip }}  - IP of the Remnawave panel (for firewall allow-list)
+#   {{ node_port }}           - Internal API port Remnawave Panel <-> Node
+#   {{ ssl_cert_pem }}         - Node SSL certificate PEM (from panel "Copy SSL" on node creation)
+#   {{ ssh_authorized_key }}   - Optional SSH key for the orchestrator to come back
+#   {{ node_hostname }}        - Short hostname
+
+hostname: {{ node_hostname }}
+manage_etc_hosts: true
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - ufw
+  - jq
+
+users:
+  - default
+  {% if ssh_authorized_key %}
+  - name: root
+    ssh_authorized_keys:
+      - {{ ssh_authorized_key }}
+  {% endif %}
+
+write_files:
+  - path: /opt/remnanode/.env
+    permissions: "0600"
+    owner: root:root
+    content: |
+      APP_PORT={{ node_port }}
+      SSL_CERT="{{ ssl_cert_pem | replace('\n', '\\n') }}"
+
+  - path: /opt/remnanode/docker-compose.yml
+    permissions: "0644"
+    owner: root:root
+    content: |
+      services:
+        remnanode:
+          image: remnawave/node:latest
+          container_name: remnanode
+          hostname: remnanode
+          restart: always
+          network_mode: host
+          env_file:
+            - .env
+          volumes:
+            - /var/lib/remnanode:/var/lib/remnanode
+
+  - path: /etc/systemd/system/remna-firewall.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Lock node port to panel IP only
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/sbin/ufw --force reset
+      ExecStart=/usr/sbin/ufw default deny incoming
+      ExecStart=/usr/sbin/ufw default allow outgoing
+      ExecStart=/usr/sbin/ufw allow 22/tcp
+      ExecStart=/usr/sbin/ufw allow from {{ remnawave_panel_ip }} to any port {{ node_port }} proto tcp
+      ExecStart=/usr/sbin/ufw allow 443/tcp
+      ExecStart=/usr/sbin/ufw allow 80/tcp
+      ExecStart=/usr/sbin/ufw --force enable
+      RemainAfterExit=yes
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [ bash, -c, "curl -fsSL https://get.docker.com | sh" ]
+  - [ systemctl, enable, --now, docker ]
+  - [ systemctl, enable, --now, remna-firewall.service ]
+  - [ bash, -c, "cd /opt/remnanode && docker compose up -d" ]
+  - [ bash, -c, "echo 'remnawave-node bootstrap complete' > /var/log/remna-bootstrap.log" ]
+
+final_message: "Remnawave Node bootstrap complete after $UPTIME seconds."
