@@ -1,26 +1,33 @@
-<table id="nodes-table">
-  <thead>
-    <tr>
-      <th>id</th><th>name</th><th>region</th><th>ipv4</th><th>status</th><th>last probe</th><th>failures</th><th>actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for n in nodes %}
-    <tr>
-      <td>{{ n.id }}</td>
-      <td>{{ n.name }}</td>
-      <td>{{ n.location }}</td>
-      <td><code>{{ n.ipv4 }}</code></td>
-      <td><span class="badge badge-{{ n.status.value }}">{{ n.status.value }}</span></td>
-      <td style="color: var(--muted);">{% if n.last_probe_at %}{{ n.last_probe_at.strftime('%H:%M:%S') }}{% else %}—{% endif %}</td>
-      <td>{{ n.consecutive_probe_failures }}</td>
-      <td class="actions">
-        <button hx-post="/ui/nodes/{{ n.id }}/rotate" hx-target="#nodes-table" hx-swap="outerHTML" hx-confirm="Rotate node {{ n.name }}? This will spawn a replacement, drain for {{ cfg.node_drain_seconds }}s, then destroy.">rotate</button>
-        <button class="danger" hx-delete="/ui/nodes/{{ n.id }}" hx-target="#nodes-table" hx-swap="outerHTML" hx-confirm="Destroy node {{ n.name }} WITHOUT rotation? (dangerous — traffic drops)">destroy</button>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="8" style="color: var(--muted); text-align: center;">no nodes yet — click <strong>spawn node</strong> to provision one.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div id="nodes-table">
+  {% if error %}
+  <div class="banner banner-error" role="alert">
+    <strong>error:</strong> <code>{{ error }}</code>
+  </div>
+  {% endif %}
+  <table>
+    <thead>
+      <tr>
+        <th>id</th><th>name</th><th>region</th><th>ipv4</th><th>status</th><th>last probe</th><th>failures</th><th>actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for n in nodes %}
+      <tr>
+        <td>{{ n.id }}</td>
+        <td>{{ n.name }}</td>
+        <td>{{ n.location }}</td>
+        <td><code>{{ n.ipv4 }}</code></td>
+        <td><span class="badge badge-{{ n.status.value }}">{{ n.status.value }}</span></td>
+        <td style="color: var(--muted);">{% if n.last_probe_at %}{{ n.last_probe_at.strftime('%H:%M:%S') }}{% else %}—{% endif %}</td>
+        <td>{{ n.consecutive_probe_failures }}</td>
+        <td class="actions">
+          <button hx-post="/ui/nodes/{{ n.id }}/rotate" hx-target="#nodes-table" hx-swap="outerHTML" hx-confirm="Rotate node {{ n.name }}? This will spawn a replacement, drain for {{ cfg.node_drain_seconds }}s, then destroy.">rotate</button>
+          <button class="danger" hx-delete="/ui/nodes/{{ n.id }}" hx-target="#nodes-table" hx-swap="outerHTML" hx-confirm="Destroy node {{ n.name }} WITHOUT rotation? (dangerous — traffic drops)">destroy</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="color: var(--muted); text-align: center;">no nodes yet — click <strong>spawn node</strong> to provision one.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

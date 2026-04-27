@@ -42,7 +42,10 @@ def client():
     from app.api.app import create_app
 
     app = create_app()
-    return TestClient(app)
+    # Use TestClient as a context manager so the FastAPI lifespan actually
+    # runs — this catches errors that would only surface in production boot.
+    with TestClient(app) as c:
+        yield c
 
 
 def test_ui_redirects_to_login_when_anonymous(client) -> None:

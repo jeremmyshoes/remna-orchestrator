@@ -7,6 +7,7 @@ Users log in with the same API_TOKEN that the REST API uses.
 from __future__ import annotations
 
 import contextlib
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -21,15 +22,33 @@ from app.models.base import session_scope
 from app.notifications.base import NotificationEvent
 from app.rotation.engine import RotationEngine
 
+log = logging.getLogger(__name__)
+
 router = APIRouter()
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[3] / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-def _require_session(request: Request) -> None:
-    if not request.session.get("authed"):
-        raise HTTPException(status_code=307, headers={"Location": "/ui/login"})
+async def _list_nodes() -> list[Node]:
+    async with session_scope() as s:
+        return (
+            await s.execute(
+                select(Node)
+                .where(Node.status != NodeStatus.DESTROYED)
+                .order_by(Node.id.asc())
+            )
+        ).scalars().all()
+
+
+async def _render_nodes_table(
+    request: Request, *, error: str | None = None
+) -> HTMLResponse:
+    nodes = await _list_nodes()
+    return templates.TemplateResponse(
+        request, "ui/_nodes_table.html",
+        {"nodes": nodes, "cfg": get_settings(), "error": error},
+    )
 
 
 async def _render_dashboard(request: Request) -> HTMLResponse:
@@ -48,7 +67,7 @@ async def _render_dashboard(request: Request) -> HTMLResponse:
         ).scalars().all()
     return templates.TemplateResponse(
         request, "ui/dashboard.html",
-        {"nodes": nodes, "events": events, "cfg": get_settings()},
+        {"nodes": nodes, "events": events, "cfg": get_settings(), "error": None},
     )
 
 
@@ -85,27 +104,23 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 
 # ---------------------------------------------------------------- HTMX bits
+# Failures in these handlers are caught and surfaced to the user as a banner
+# in the returned partial, rather than silently swallowed — the engine calls
+# can create billable cloud resources, so the user MUST see errors.
+
 @router.post("/ui/nodes/spawn", response_class=HTMLResponse)
 async def ui_spawn(
     request: Request, engine: RotationEngine = EngineDep
 ) -> HTMLResponse:
     if not request.session.get("authed"):
         raise HTTPException(401)
-    with contextlib.suppress(Exception):
+    error = None
+    try:
         await engine.spawn_node()
-    # Re-render just the nodes table (HTMX swaps it in)
-    async with session_scope() as s:
-        nodes = (
-            await s.execute(
-                select(Node)
-                .where(Node.status != NodeStatus.DESTROYED)
-                .order_by(Node.id.asc())
-            )
-        ).scalars().all()
-    return templates.TemplateResponse(
-        request, "ui/_nodes_table.html",
-        {"nodes": nodes, "cfg": get_settings()},
-    )
+    except Exception as exc:
+        log.exception("ui: spawn_node failed")
+        error = f"Spawn failed: {exc!r}"
+    return await _render_nodes_table(request, error=error)
 
 
 @router.post("/ui/pool/ensure", response_class=HTMLResponse)
@@ -114,20 +129,13 @@ async def ui_ensure_pool(
 ) -> HTMLResponse:
     if not request.session.get("authed"):
         raise HTTPException(401)
-    with contextlib.suppress(Exception):
+    error = None
+    try:
         await engine.ensure_pool()
-    async with session_scope() as s:
-        nodes = (
-            await s.execute(
-                select(Node)
-                .where(Node.status != NodeStatus.DESTROYED)
-                .order_by(Node.id.asc())
-            )
-        ).scalars().all()
-    return templates.TemplateResponse(
-        request, "ui/_nodes_table.html",
-        {"nodes": nodes, "cfg": get_settings()},
-    )
+    except Exception as exc:
+        log.exception("ui: ensure_pool failed")
+        error = f"Ensure pool failed: {exc!r}"
+    return await _render_nodes_table(request, error=error)
 
 
 @router.post("/ui/nodes/{node_id}/rotate", response_class=HTMLResponse)
@@ -136,20 +144,13 @@ async def ui_rotate(
 ) -> HTMLResponse:
     if not request.session.get("authed"):
         raise HTTPException(401)
-    with contextlib.suppress(Exception):
+    error = None
+    try:
         await engine.rotate_node(node_id, RotationReason.MANUAL)
-    async with session_scope() as s:
-        nodes = (
-            await s.execute(
-                select(Node)
-                .where(Node.status != NodeStatus.DESTROYED)
-                .order_by(Node.id.asc())
-            )
-        ).scalars().all()
-    return templates.TemplateResponse(
-        request, "ui/_nodes_table.html",
-        {"nodes": nodes, "cfg": get_settings()},
-    )
+    except Exception as exc:
+        log.exception("ui: rotate_node failed id=%s", node_id)
+        error = f"Rotate failed: {exc!r}"
+    return await _render_nodes_table(request, error=error)
 
 
 @router.delete("/ui/nodes/{node_id}", response_class=HTMLResponse)
@@ -158,31 +159,45 @@ async def ui_destroy(
 ) -> HTMLResponse:
     if not request.session.get("authed"):
         raise HTTPException(401)
+    errors: list[str] = []
     async with session_scope() as s:
         node = (
             await s.execute(select(Node).where(Node.id == node_id))
         ).scalar_one_or_none()
     if node:
-        # Each external call gets its own suppress block so a failure in one
-        # step doesn't skip the rest (otherwise we leave orphaned resources).
+        # Each external call gets its own try-block so a failure in one step
+        # doesn't skip the rest (otherwise we'd leave orphaned resources).
         if node.remnawave_uuid:
-            with contextlib.suppress(Exception):
+            try:
                 await engine.rw.disable_node(node.remnawave_uuid)
-            with contextlib.suppress(Exception):
+            except Exception as exc:
+                log.exception("ui_destroy: disable_node failed")
+                errors.append(f"disable_node: {exc!r}")
+            try:
                 await engine.rw.delete_node(node.remnawave_uuid)
+            except Exception as exc:
+                log.exception("ui_destroy: delete_node failed")
+                errors.append(f"delete_node: {exc!r}")
         if node.fqdn:
             short = node.fqdn.replace(f".{get_settings().cloudflare_root_domain}", "")
-            with contextlib.suppress(Exception):
+            try:
                 await engine.dns.delete_a_record(short)
+            except Exception as exc:
+                log.exception("ui_destroy: delete_a_record failed")
+                errors.append(f"dns: {exc!r}")
         if node.cloud_id:
-            with contextlib.suppress(Exception):
+            try:
                 await engine.cloud.destroy_instance(node.cloud_id)
+            except Exception as exc:
+                log.exception("ui_destroy: destroy_instance failed")
+                errors.append(f"cloud: {exc!r}")
         async with session_scope() as s:
             row = (await s.execute(select(Node).where(Node.id == node_id))).scalar_one()
             row.status = NodeStatus.DESTROYED
             s.add(RotationEvent(
                 reason=RotationReason.MANUAL, from_node=node.name, to_node=None,
-                success=True, details="ui destroy",
+                success=not errors,
+                details="; ".join(errors) if errors else "ui destroy",
             ))
         with contextlib.suppress(Exception):
             await engine.notifier.send(NotificationEvent(
@@ -192,15 +207,5 @@ async def ui_destroy(
                 from_node=node.name,
                 extra={"ip": node.ipv4, "region": node.location},
             ))
-    async with session_scope() as s:
-        nodes = (
-            await s.execute(
-                select(Node)
-                .where(Node.status != NodeStatus.DESTROYED)
-                .order_by(Node.id.asc())
-            )
-        ).scalars().all()
-    return templates.TemplateResponse(
-        request, "ui/_nodes_table.html",
-        {"nodes": nodes, "cfg": get_settings()},
-    )
+    error_msg = "; ".join(errors) if errors else None
+    return await _render_nodes_table(request, error=error_msg)
