@@ -1,0 +1,27 @@
+<table>
+  <thead>
+    <tr>
+      <th>when</th><th>reason</th><th>from</th><th>to</th><th>ok</th><th>details</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in events %}
+    <tr>
+      <td style="color: var(--muted);">{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td><code>{{ r.reason.value }}</code></td>
+      <td>{{ r.from_node or '—' }}</td>
+      <td>{{ r.to_node or '—' }}</td>
+      <td>
+        {% if r.success %}
+          <span class="badge badge-active">ok</span>
+        {% else %}
+          <span class="badge badge-blocked">fail</span>
+        {% endif %}
+      </td>
+      <td style="color: var(--muted); font-size: .8rem;">{{ (r.details or '')[:120] }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" style="color: var(--muted); text-align: center;">no rotations yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

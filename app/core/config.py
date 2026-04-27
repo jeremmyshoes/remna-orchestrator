@@ -92,6 +92,27 @@ class Settings(BaseSettings):
     node_ssh_user: str = "root"
     node_ssh_port: int = 22
 
+    # --- Graceful drain before deleting an old node (iter 1) ---
+    node_drain_seconds: int = 120  # after disable, wait before delete
+    # Wait for newly created node to become healthy before cutting over.
+    node_bootstrap_wait_seconds: int = 120
+
+    # --- Notifications (iter 2) ---
+    telegram_bot_token: SecretStr = SecretStr("")
+    telegram_chat_id: str = ""
+    discord_webhook_url: SecretStr = SecretStr("")
+
+    # --- Cross-region balancing (iter 6) ---
+    # Hetzner locations you want to rotate between. spawn will pick the
+    # least-populated one from this list each time.
+    hetzner_allowed_locations: list[str] = Field(
+        default_factory=lambda: ["fsn1", "nbg1", "hel1"]
+    )
+
+    # --- Web UI (iter 7) ---
+    ui_enabled: bool = True
+    ui_session_secret: SecretStr = SecretStr("change-me-session-secret")
+
 
 @lru_cache
 def get_settings() -> Settings:
