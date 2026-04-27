@@ -1,15 +1,38 @@
 services:
   orchestrator:
     build: .
-    image: remna-orchestrator:0.1.0
+    image: remna-orchestrator:0.2.0
     container_name: remna-orchestrator
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      DATABASE_URL: "sqlite+aiosqlite:////app/data/remna-orchestrator.db"
+    # Set DATABASE_URL in your .env — defaults to SQLite volume.
+    # For PostgreSQL: postgresql+asyncpg://remna:remna@postgres:5432/remna
     ports:
       - "8080:8080"
     volumes:
       - ./data:/app/data
       - ./templates:/app/templates:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
+  # Optional PostgreSQL service. Comment this out if you want to stay on SQLite.
+  postgres:
+    image: postgres:16-alpine
+    container_name: remna-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: remna
+      POSTGRES_PASSWORD: remna
+      POSTGRES_DB: remna
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remna -d remna"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:5432:5432"   # bind to localhost only

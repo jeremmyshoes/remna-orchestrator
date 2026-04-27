@@ -6,6 +6,9 @@ from app.dns_adapters.base import DNSAdapter
 
 def get_dns_adapter() -> DNSAdapter:
     s = get_settings()
+    if s.dns_provider in ("null", "none"):
+        from app.dns_adapters.null import NullDNSAdapter
+        return NullDNSAdapter()
     if s.dns_provider == "cloudflare":
         from app.dns_adapters.cloudflare import CloudflareAdapter
         return CloudflareAdapter(

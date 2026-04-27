@@ -1,0 +1,29 @@
+{% extends "ui/base.html" %}
+{% block title %}dashboard — remna-orchestrator{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content: space-between; align-items: center;">
+    <h2 style="margin:0;">Nodes</h2>
+    <div>
+      <button hx-post="/ui/nodes/spawn" hx-target="#nodes-table" hx-swap="outerHTML" hx-confirm="Spawn a new node on Hetzner (billable)?">+ spawn node</button>
+      <button class="ghost" hx-post="/ui/pool/ensure" hx-target="#nodes-table" hx-swap="outerHTML">ensure pool</button>
+    </div>
+  </div>
+  {% include "ui/_nodes_table.html" %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top: 0;">Recent rotations</h2>
+  {% include "ui/_rotations_table.html" %}
+</div>
+
+<div class="card" style="color: var(--muted); font-size: .85rem;">
+  <strong>Config snapshot:</strong>
+  cloud=<code>{{ cfg.cloud_provider }}</code>,
+  regions=<code>{{ cfg.hetzner_allowed_locations | join(', ') }}</code>,
+  pool=<code>{{ cfg.node_pool_min_size }}..{{ cfg.node_pool_max_size }}</code>,
+  drain=<code>{{ cfg.node_drain_seconds }}s</code>,
+  probe=<code>{{ cfg.rotation_probe_interval_seconds }}s</code>,
+  schedule=<code>{{ cfg.rotation_schedule_cron }}</code>.
+</div>
+{% endblock %}

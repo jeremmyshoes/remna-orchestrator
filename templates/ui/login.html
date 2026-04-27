@@ -1,0 +1,13 @@
+{% extends "ui/base.html" %}
+{% block title %}login — remna-orchestrator{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 420px; margin: 80px auto;">
+  <h2>sign in</h2>
+  {% if error %}<div class="flash flash-err">{{ error }}</div>{% endif %}
+  <form method="post" action="/ui/login">
+    <p style="color: var(--muted); font-size: .9rem;">Enter your <code>API_TOKEN</code> from <code>.env</code>.</p>
+    <input type="password" name="token" placeholder="API_TOKEN" autofocus required>
+    <div style="margin-top: 16px;"><button type="submit">login</button></div>
+  </form>
+</div>
+{% endblock %}

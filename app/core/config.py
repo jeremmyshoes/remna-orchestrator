@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     )
 
     # --- Cloud provider ---
-    cloud_provider: Literal["h2nexus", "hetzner", "none"] = "h2nexus"
+    cloud_provider: Literal["h2nexus", "hetzner", "none", "null"] = "h2nexus"
 
     # h2.nexus (BillManager)
     h2nexus_base_url: str = "https://my.h2.nexus/billmgr"
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     hetzner_ssh_key_name: str = ""
 
     # --- DNS ---
-    dns_provider: Literal["cloudflare", "none"] = "cloudflare"
+    dns_provider: Literal["cloudflare", "none", "null"] = "cloudflare"
     cloudflare_api_token: SecretStr = SecretStr("")
     cloudflare_zone_id: str = ""
     cloudflare_subscription_host: str = "sub"  # e.g. sub.example.com
@@ -91,6 +91,27 @@ class Settings(BaseSettings):
     # SSH connection defaults for node bootstrap / maintenance
     node_ssh_user: str = "root"
     node_ssh_port: int = 22
+
+    # --- Graceful drain before deleting an old node (iter 1) ---
+    node_drain_seconds: int = 120  # after disable, wait before delete
+    # Wait for newly created node to become healthy before cutting over.
+    node_bootstrap_wait_seconds: int = 120
+
+    # --- Notifications (iter 2) ---
+    telegram_bot_token: SecretStr = SecretStr("")
+    telegram_chat_id: str = ""
+    discord_webhook_url: SecretStr = SecretStr("")
+
+    # --- Cross-region balancing (iter 6) ---
+    # Hetzner locations you want to rotate between. spawn will pick the
+    # least-populated one from this list each time.
+    hetzner_allowed_locations: list[str] = Field(
+        default_factory=lambda: ["fsn1", "nbg1", "hel1"]
+    )
+
+    # --- Web UI (iter 7) ---
+    ui_enabled: bool = True
+    ui_session_secret: SecretStr = SecretStr("change-me-session-secret")
 
 
 @lru_cache

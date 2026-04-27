@@ -8,6 +8,9 @@ from app.core.config import get_settings
 
 def get_cloud_adapter() -> CloudAdapter:
     s = get_settings()
+    if s.cloud_provider in ("null", "none"):
+        from app.cloud_adapters.null import NullCloudAdapter
+        return NullCloudAdapter()
     if s.cloud_provider == "h2nexus":
         from app.cloud_adapters.h2nexus import H2NexusAdapter
         return H2NexusAdapter(
