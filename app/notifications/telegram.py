@@ -26,8 +26,12 @@ class TelegramNotifier(Notifier):
                 url,
                 json={
                     "chat_id": self.chat_id,
-                    "text": event.to_markdown(),
-                    "parse_mode": "Markdown",
+                    # Telegram's legacy Markdown would mis-parse our
+                    # snake_case identifiers (e.g. `rotation_success`,
+                    # `new_ip`) as italic. HTML is safer — only `<`, `>`, `&`
+                    # need escaping, and `to_html()` handles that.
+                    "text": event.to_html(),
+                    "parse_mode": "HTML",
                     "disable_web_page_preview": True,
                 },
             )

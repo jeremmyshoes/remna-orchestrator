@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     )
 
     # --- Cloud provider ---
-    cloud_provider: Literal["h2nexus", "hetzner", "none"] = "h2nexus"
+    cloud_provider: Literal["h2nexus", "hetzner", "none", "null"] = "h2nexus"
 
     # h2.nexus (BillManager)
     h2nexus_base_url: str = "https://my.h2.nexus/billmgr"
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     hetzner_ssh_key_name: str = ""
 
     # --- DNS ---
-    dns_provider: Literal["cloudflare", "none"] = "cloudflare"
+    dns_provider: Literal["cloudflare", "none", "null"] = "cloudflare"
     cloudflare_api_token: SecretStr = SecretStr("")
     cloudflare_zone_id: str = ""
     cloudflare_subscription_host: str = "sub"  # e.g. sub.example.com

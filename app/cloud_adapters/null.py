@@ -1,7 +1,8 @@
 """No-op cloud adapter for local development and tests.
 
-Set ``CLOUD_PROVIDER=null`` (or ``none``) in .env to boot the app without a
-real Hetzner/h2.nexus account. Real-resource actions raise informative errors.
+Set ``CLOUD_PROVIDER=none`` (or the alias ``null``) in .env to boot the app
+without a real Hetzner/h2.nexus account. Real-resource actions raise
+informative errors; read-only calls return empty results.
 """
 
 from __future__ import annotations
